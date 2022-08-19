@@ -4,7 +4,7 @@ import chalk from 'chalk';
 import prompts from 'prompts';
 
 import { create } from '../buidler';
-import { CreationStatus } from '../types';
+import { CreationStatus, BlockchainTools } from '../types';
 
 const defaultPadding = 5;
 
@@ -28,6 +28,14 @@ MMMMMMMMMMMMMMMMMMMMMMNOl:dXMMMMMMMMMMMMMMMMMMMMMM
 MMMMMMMMMMMMMMMMMMMMMMMWXXNMMMMMMMMMMMMMMMMMMMMMMM
 `.trim();
 
+function validateBundleId(value: string): boolean {
+  return /^[a-zA-Z][a-zA-Z0-9\-.]+$/.test(value);
+}
+
+function validatePackage(value: string): boolean {
+  return /^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(value);
+}
+
 (async () => {
   console.clear();
   console.log();
@@ -42,7 +50,12 @@ MMMMMMMMMMMMMMMMMMMMMMMWXXNMMMMMMMMMMMMMMMMMMMMMMM
 
   console.log();
 
-  const { name } = await prompts([
+  const {
+    name,
+    bundleIdentifier,
+    packageName,
+    blockchainTools,
+  } = await prompts([
     {
       type: 'text',
       name: 'name',
@@ -53,11 +66,8 @@ MMMMMMMMMMMMMMMMMMMMMMMWXXNMMMMMMMMMMMMMMMMMMMMMMM
           return `Expected string, encountered ${typeof value}.`;
         } else if (!value.length) {
           return 'Name cannot be empty.';
-        } else if (
-          !value.match(/^[a-z0-9-]+$/i) ||
-          value.toLowerCase() !== value
-        ) {
-          return 'Name must be lowercase alphanumeric and contain no special characters other than a hyphen.';
+        } else if (!value.match(/^[a-z0-9-]+$/i)) {
+          return 'Name must be alphanumeric and contain no special characters other than a hyphen.';
         } else if (/^\d/.test(value)) {
           return 'Name cannot begin with a number.';
         } else if (/^-/.test(value)) {
@@ -66,35 +76,69 @@ MMMMMMMMMMMMMMMMMMMMMMMWXXNMMMMMMMMMMMMMMMMMMMMMMM
         return true;
       },
     },
+    {
+      type: 'select',
+      name: 'blockchainTools',
+      message: 'Which blockchain tools would you like to use?',
+      choices: [
+        {
+          title: '👷 Hardhat',
+          value: BlockchainTools.HARDHAT,
+        },
+        {
+          title: '🍫 Truffle Suite',
+          value: BlockchainTools.TRUFFLE,
+        },
+        {
+          title: '💨 None',
+          value: BlockchainTools.NONE,
+        },
+      ],
+      initial: 0,
+    },
+    {
+      type: 'text',
+      name: 'bundleIdentifier',
+      message: 'What is the iOS bundle identifier?',
+      validate: (value) => {
+        if (!validateBundleId(value)) {
+          return `Only alphanumeric characters, '.', '-', and '_' are allowed, and each '.' must be followed by a letter.`;
+        }
+        return true;
+      },
+    },
+    {
+      type: 'text',
+      name: 'packageName',
+      message: 'What is the Android package name?',
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      initial: (last) => {
+        if (!validatePackage(last)) {
+          return undefined;
+        }
+        return last;
+      },
+      validate: (value) => {
+        if (!validatePackage(value)) {
+          return `Only alphanumeric characters, '.' and '_' are allowed, and each '.' must be followed by a letter.`;
+        }
+        return true;
+      },
+    },
   ]);
 
-  const { message, status, shouldUseYarn } = await create({ name });
+  const { status, message } = await create({
+    name,
+    bundleIdentifier,
+    packageName,
+    blockchainTools,
+  });
 
   if (status === CreationStatus.FAILURE) {
     // eslint-disable-next-line functional/no-throw-statement
     throw new Error(message);
   }
-
-  const cmd = (str: string) =>
-    chalk.white.bold`${shouldUseYarn ? 'yarn' : 'npm run-script'} ${str}`;
-
-  console.log();
-  console.log(
-    chalk.green`✔`,
-    'Successfully integrated Web3 into React Native!'
-  );
-  console.log();
-  console.log(
-    'To compile and run your project in development, execute one of the following commands:'
-  );
-  console.log('-', cmd('ios'));
-  console.log('-', cmd('android'));
-  console.log('-', cmd('web'));
-  console.log();
-  console.log('You can also simulate the blockchain by executing:');
-  console.log('-', cmd('ganache'));
-  console.log('To recompile your contracts, use:');
-  console.log('-', chalk.white.bold`npx truffle compile`);
-
+  console.log(message);
   console.log();
 })();
